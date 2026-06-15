@@ -111,6 +111,12 @@
   body.editing .del{display:grid}
   body.editing .check,body.editing .counter{opacity:.3;pointer-events:none}
 
+  /* drag to reorder */
+  .habit{cursor:grab;transition:transform .18s cubic-bezier(.2,.7,.3,1)}
+  .habit.dragging{transition:none;cursor:grabbing;z-index:20;opacity:.97;box-shadow:0 12px 30px rgba(0,0,0,.28)}
+  body.reordering{user-select:none;-webkit-user-select:none}
+  .habit .check,.habit .cbtn{cursor:pointer}
+
   .add{border:1px dashed var(--border-strong);background:transparent;color:var(--muted);border-radius:16px;
     padding:14px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:border-color .2s,color .2s}
   .add:active{border-color:var(--accent);color:var(--accent)}
@@ -476,6 +482,71 @@ document.getElementById('todayList').addEventListener('click',e=>{
   const del=e.target.closest('.del');
   if(del){habits=habits.filter(x=>x.id!==del.dataset.del);save();prev=snapshot();renderAll();return;}
 });
+/* drag-and-drop reordering (mouse + touch) */
+(function(){
+  const list=document.getElementById('todayList');
+  const CTRL='.check,.cbtn,.del',GAP=10;
+  let pending=null,dragging=false,dragEl=null,pid=null,lpTimer=null,isTouch=false;
+  let startX=0,startY=0,slotH=0,fromIndex=0,toIndex=0,items=[],centers=[];
+  function beginDrag(){
+    clearTimeout(lpTimer);
+    dragging=true;dragEl=pending;pending=null;
+    items=[...list.querySelectorAll('.habit')];
+    fromIndex=items.indexOf(dragEl);toIndex=fromIndex;
+    const r=dragEl.getBoundingClientRect();slotH=r.height+GAP;
+    centers=items.map(el=>{const b=el.getBoundingClientRect();return b.top+b.height/2;});
+    dragEl.classList.add('dragging');document.body.classList.add('reordering');
+    try{list.setPointerCapture(pid);}catch(_){}
+    if(navigator.vibrate){try{navigator.vibrate(8);}catch(_){}}
+  }
+  function onDown(e){
+    if(e.pointerType==='mouse'&&e.button!==0)return;
+    const card=e.target.closest('.habit');
+    if(!card||e.target.closest(CTRL))return;
+    pending=card;pid=e.pointerId;isTouch=e.pointerType!=='mouse';
+    startX=e.clientX;startY=e.clientY;
+    if(isTouch)lpTimer=setTimeout(()=>{if(pending)beginDrag();},180);
+  }
+  function onMove(e){
+    if(e.pointerId!==pid)return;
+    const x=e.clientX,y=e.clientY;
+    if(!dragging){
+      if(!pending)return;
+      const dx=Math.abs(x-startX),dy0=Math.abs(y-startY);
+      if(isTouch){if(dx>10||dy0>10){clearTimeout(lpTimer);pending=null;}return;}
+      if(dx>4||dy0>4)beginDrag();else return;
+    }
+    const dy=y-startY,dragCenter=centers[fromIndex]+dy;
+    dragEl.style.transform=`translateY(${dy}px)`;
+    let t=fromIndex;
+    if(dy>0){for(let i=fromIndex+1;i<items.length;i++){if(dragCenter>centers[i])t=i;else break;}}
+    else{for(let i=fromIndex-1;i>=0;i--){if(dragCenter<centers[i])t=i;else break;}}
+    toIndex=t;
+    items.forEach((el,i)=>{
+      if(el===dragEl)return;
+      let s=0;
+      if(i>fromIndex&&i<=toIndex)s=-slotH;
+      else if(i<fromIndex&&i>=toIndex)s=slotH;
+      el.style.transform=s?`translateY(${s}px)`:'';
+    });
+  }
+  function onUp(e){
+    if(e.pointerId!==pid)return;
+    clearTimeout(lpTimer);
+    try{list.releasePointerCapture(pid);}catch(_){}
+    if(dragging){
+      items.forEach(el=>el.style.transform='');
+      dragEl.classList.remove('dragging');document.body.classList.remove('reordering');
+      if(toIndex!==fromIndex){const[m]=habits.splice(fromIndex,1);habits.splice(toIndex,0,m);save();renderAll();}
+    }
+    pending=null;dragging=false;dragEl=null;pid=null;items=[];
+  }
+  list.addEventListener('pointerdown',onDown);
+  list.addEventListener('pointermove',onMove);
+  list.addEventListener('pointerup',onUp);
+  list.addEventListener('pointercancel',onUp);
+  list.addEventListener('touchmove',e=>{if(dragging)e.preventDefault();},{passive:false});
+})();
 document.getElementById('editBtn').addEventListener('click',e=>{editing=!editing;document.body.classList.toggle('editing',editing);e.target.classList.toggle('on',editing);});
 document.querySelectorAll('.nav button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));b.classList.add('active');document.getElementById('view-'+b.dataset.v).classList.add('active');window.scrollTo({top:0,behavior:'smooth'});}));
 document.getElementById('prevM').onclick=()=>{calRef.setMonth(calRef.getMonth()-1);renderCal();};
