@@ -134,6 +134,29 @@
   .note-status{font-size:11.5px;color:var(--accent);font-weight:500}
   .note-count{font-size:11px;color:var(--faint)}
 
+  /* weekly to-do */
+  .todo-add{display:flex;gap:8px}
+  .todo-add input{flex:1;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:11px 13px;color:var(--text);font-family:inherit;font-size:14.5px;outline:none;transition:border-color .2s}
+  .todo-add input::placeholder{color:var(--faint)}
+  .todo-add input:focus{border-color:var(--accent)}
+  .todo-add-btn{flex-shrink:0;border:none;border-radius:12px;padding:0 17px;background:var(--accent);color:#fff;
+    font-family:inherit;font-weight:600;font-size:14px;cursor:pointer;transition:opacity .2s,transform .12s}
+  .todo-add-btn:active{transform:scale(.95)}
+  .todo-add-btn:disabled{opacity:.4;cursor:default}
+  .todo{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 13px}
+  .tcheck{width:24px;height:24px;border-radius:8px;flex-shrink:0;cursor:pointer;border:2px solid var(--border-strong);
+    background:transparent;display:grid;place-items:center;transition:background .2s,border-color .2s}
+  .tcheck svg{width:14px;height:14px;stroke:#fff;stroke-width:3.5;fill:none;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:26;stroke-dashoffset:26;transition:stroke-dashoffset .25s ease .04s}
+  .todo.done .tcheck{background:var(--accent);border-color:var(--accent)}
+  .todo.done .tcheck svg{stroke-dashoffset:0}
+  .ttext{flex:1;min-width:0;font-size:14.5px;line-height:1.35;letter-spacing:-.01em;word-break:break-word}
+  .todo.done .ttext{color:var(--faint);text-decoration:line-through}
+  .tdel{flex-shrink:0;width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:transparent;
+    color:var(--muted);font-size:16px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:color .2s,border-color .2s}
+  .tdel:active{color:#E5484D;border-color:#E5484D}
+
   /* stats */
   .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   .stat{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:15px}
@@ -269,6 +292,23 @@
       </div>
     </div>
 
+    <!-- TO-DO -->
+    <div class="view" id="view-todo">
+      <div class="row-head"><h2>TODAY</h2><span class="num" id="dayRange" style="font-size:12px;color:var(--faint);font-weight:500"></span></div>
+      <form class="todo-add" id="todoDayAdd" autocomplete="off">
+        <input id="todoDayInput" type="text" maxlength="60" placeholder="Add a task for today…">
+        <button type="submit" class="todo-add-btn" id="todoDayBtn" disabled>Add</button>
+      </form>
+      <div class="list" id="todoDayList"></div>
+
+      <div class="row-head" style="margin-top:6px"><h2>THIS WEEK</h2><span class="num" id="weekRange" style="font-size:12px;color:var(--faint);font-weight:500"></span></div>
+      <form class="todo-add" id="todoWeekAdd" autocomplete="off">
+        <input id="todoWeekInput" type="text" maxlength="60" placeholder="Add a task for this week…">
+        <button type="submit" class="todo-add-btn" id="todoWeekBtn" disabled>Add</button>
+      </form>
+      <div class="list" id="todoWeekList"></div>
+    </div>
+
     <!-- CALENDAR -->
     <div class="view" id="view-cal">
       <div class="panel">
@@ -300,6 +340,7 @@
 
   <nav class="nav">
     <button class="active" data-v="today"><span class="ic">◴</span>Today</button>
+    <button data-v="todo"><span class="ic">▤</span>To-Do</button>
     <button data-v="cal"><span class="ic">▦</span>Calendar</button>
     <button data-v="stats"><span class="ic">◰</span>Stats</button>
     <button data-v="badges"><span class="ic">◆</span>Badges</button>
@@ -608,13 +649,69 @@ noteInput.addEventListener('input',()=>{
   },400);
 });
 
+/* to-do lists: Today + This week (own localStorage key — never touches XP/levels/streaks/badges) */
+const TODO_KEY='habit-quest-todos-v1';
+let todoLoaded=false;
+function weekStartKey(){const x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));return key(x);}
+const todoLists={
+  day:{period:null,items:[],cur:()=>TODAY(),listId:'todoDayList',inputId:'todoDayInput',btnId:'todoDayBtn',formId:'todoDayAdd',empty:'No tasks for today yet. Add one above.'},
+  week:{period:null,items:[],cur:()=>weekStartKey(),listId:'todoWeekList',inputId:'todoWeekInput',btnId:'todoWeekBtn',formId:'todoWeekAdd',empty:'No tasks for this week yet. Add one above.'}
+};
+const TODO_SCOPES=['day','week'];
+function saveTodos(){try{localStorage.setItem(TODO_KEY,JSON.stringify({day:{period:todoLists.day.period,items:todoLists.day.items},week:{period:todoLists.week.period,items:todoLists.week.items}}));}catch(e){console.error(e);}}
+function todoRollover(){
+  if(!todoLoaded){
+    let data;try{const r=localStorage.getItem(TODO_KEY);if(r)data=JSON.parse(r);}catch(e){}
+    data=data||{};
+    for(const kk of TODO_SCOPES){const src=data[kk]||{};todoLists[kk].items=Array.isArray(src.items)?src.items:[];todoLists[kk].period=src.period||todoLists[kk].cur();}
+    todoLoaded=true;
+  }
+  let changed=false;
+  for(const kk of TODO_SCOPES){const c=todoLists[kk].cur();if(todoLists[kk].period!==c){todoLists[kk].items=todoLists[kk].items.filter(t=>!t.done);todoLists[kk].period=c;changed=true;}}
+  if(changed)saveTodos();
+}
+function renderTodoList(kk){
+  const L=todoLists[kk],el=document.getElementById(L.listId);el.innerHTML='';
+  if(!L.items.length){el.innerHTML=`<div class="empty"><div class="big">📝</div><p>${L.empty}</p></div>`;return;}
+  L.items.forEach(t=>{
+    const row=document.createElement('div');row.className='todo'+(t.done?' done':'');
+    row.innerHTML=`<button class="tcheck" data-tid="${t.id}"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"/></svg></button><div class="ttext">${esc(t.text)}</div><button class="tdel" data-tdel="${t.id}">×</button>`;
+    el.appendChild(row);
+  });
+}
+function renderTodos(){
+  todoRollover();
+  const d=parseKey(todoLists.day.period);
+  document.getElementById('dayRange').textContent=`${MONTHS[d.getMonth()].slice(0,3)} ${d.getDate()}`;
+  const ws=parseKey(todoLists.week.period),we=new Date(ws);we.setDate(we.getDate()+6);
+  document.getElementById('weekRange').textContent=`${MONTHS[ws.getMonth()].slice(0,3)} ${ws.getDate()} – ${MONTHS[we.getMonth()].slice(0,3)} ${we.getDate()}`;
+  renderTodoList('day');renderTodoList('week');
+}
+for(const kk of TODO_SCOPES){
+  const L=todoLists[kk];
+  const input=document.getElementById(L.inputId),btn=document.getElementById(L.btnId);
+  input.addEventListener('input',()=>{btn.disabled=!input.value.trim();});
+  document.getElementById(L.formId).addEventListener('submit',e=>{
+    e.preventDefault();const text=input.value.trim();if(!text)return;
+    todoRollover();L.items.push({id:crypto.randomUUID(),text,done:false});saveTodos();renderTodoList(kk);
+    input.value='';btn.disabled=true;input.focus();
+  });
+  document.getElementById(L.listId).addEventListener('click',e=>{
+    const c=e.target.closest('.tcheck');
+    if(c){const t=L.items.find(x=>x.id===c.dataset.tid);if(t){t.done=!t.done;saveTodos();renderTodoList(kk);}return;}
+    const del=e.target.closest('.tdel');
+    if(del){L.items=L.items.filter(x=>x.id!==del.dataset.tdel);saveTodos();renderTodoList(kk);return;}
+  });
+}
+document.querySelector('.nav button[data-v="todo"]').addEventListener('click',renderTodos);
+
 /* boot */
 (function(){
   let t;try{t=localStorage.getItem(THEME_KEY);}catch(e){}
   if(!t)t='dark';
   applyTheme(t);
   const s=load();if(s)habits=s;else{habits=seed();save();}
-  prev=snapshot();renderAll();initNote();
+  prev=snapshot();renderAll();initNote();renderTodos();
 })();
 </script>
 </body>
