@@ -113,8 +113,11 @@
     background:var(--glass-strong);color:#FF6B6B;font-size:15px;cursor:pointer;display:none;place-items:center;z-index:2}
   body.editing .del{display:grid}
   body.editing .check,body.editing .counter{opacity:.3;pointer-events:none}
-  .hedit{position:absolute;top:9px;right:41px;width:26px;height:26px;border-radius:9px;border:1px solid var(--border);background:var(--glass-strong);color:var(--accent);font-size:13px;cursor:pointer;display:none;place-items:center;z-index:2}
-  body.editing .hedit{display:grid}
+  .h-name{display:flex;align-items:center;gap:7px}
+  .h-name h3{flex:1;min-width:0}
+  .hedit{flex-shrink:0;width:24px;height:24px;border-radius:8px;border:1px solid var(--border);background:var(--glass-2);color:var(--muted);font-size:12px;cursor:pointer;display:grid;place-items:center;transition:color .2s,border-color .2s,transform .12s}
+  .hedit:hover{color:var(--accent);border-color:var(--accent)}
+  .hedit:active{transform:scale(.92)}
   .h-meta .wk{color:var(--accent);font-weight:700}
   .h-meta .wk.done{color:var(--accent-2)}
 
@@ -569,7 +572,7 @@ function renderToday(){
     let control;
     if(h.type==='count'){control=`<div class="counter"><button class="cbtn minus" data-id="${h.id}" data-d="-1">−</button><div class="cval ${done?'full':''}"><b>${v}</b>/${h.target}</div><button class="cbtn plus" data-id="${h.id}" data-d="1">+</button></div>`;}
     else{control=`<button class="check ${done?'done':''}" data-id="${h.id}"><svg viewBox="0 0 24 24"><polyline points="4 12 10 18 20 6"/></svg></button>`;}
-    card.innerHTML=`<button class="hedit" data-edit="${h.id}">✎</button><button class="del" data-del="${h.id}">×</button><div class="h-top"><div class="h-emoji">${h.emoji}</div><div class="h-info"><h3>${esc(h.name)}</h3><div class="h-meta">${s>0?`<span class="fire">🔥 ${s}d</span>`:'<span>Start today</span>'}${h.type==='count'?`<span>· goal ${h.target} ${esc(h.unit||'')}</span>`:''}${h.weekly?`<span class="wk${wp>=h.weekly?' done':''}">${wp>=h.weekly?'✓ ':''}${Math.min(wp,h.weekly)}/${h.weekly} this week</span>`:''}</div></div>${control}</div><div class="week">${week.map(d=>{const k=key(d),on=isDone(h,k),t=k===tk;return `<div class="day ${t?'today':''}"><span>${DSHORT[d.getDay()]}</span><div class="dot ${on?'on':''}"></div></div>`;}).join('')}</div>`;
+    card.innerHTML=`<button class="del" data-del="${h.id}">×</button><div class="h-top"><div class="h-emoji">${h.emoji}</div><div class="h-info"><div class="h-name"><h3>${esc(h.name)}</h3><button class="hedit" data-edit="${h.id}" aria-label="Edit habit">✎</button></div><div class="h-meta">${s>0?`<span class="fire">🔥 ${s}d</span>`:'<span>Start today</span>'}${h.type==='count'?`<span>· goal ${h.target} ${esc(h.unit||'')}</span>`:''}${h.weekly?`<span class="wk${wp>=h.weekly?' done':''}">${wp>=h.weekly?'✓ ':''}${Math.min(wp,h.weekly)}/${h.weekly} this week</span>`:''}</div></div>${control}</div><div class="week">${week.map(d=>{const k=key(d),on=isDone(h,k),t=k===tk;return `<div class="day ${t?'today':''}"><span>${DSHORT[d.getDay()]}</span><div class="dot ${on?'on':''}"></div></div>`;}).join('')}</div>`;
     list.appendChild(card);
   });
 }
