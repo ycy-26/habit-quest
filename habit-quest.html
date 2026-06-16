@@ -160,6 +160,15 @@
     color:var(--muted);font-size:16px;line-height:1;cursor:pointer;display:grid;place-items:center;transition:color .2s,border-color .2s}
   .tdel:active{color:#FF6B6B;border-color:#FF6B6B}
 
+  /* data */
+  .data-desc{font-size:13px;color:var(--muted);line-height:1.5;margin:-4px 0 16px}
+  .data-actions{display:flex;flex-direction:column;gap:10px}
+  .data-btn{width:100%;border:1px solid var(--border);background:var(--glass-2);color:var(--text);border-radius:13px;
+    padding:13px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;transition:transform .15s,border-color .2s}
+  .data-btn:active{transform:scale(.98)}
+  .data-btn.primary{border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+  .data-status{font-size:12px;color:var(--accent);font-weight:600;margin-top:14px;min-height:15px}
+
   /* stats */
   .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   .stat{border-radius:16px;padding:15px}
@@ -341,6 +350,21 @@
       <div class="row-head"><h2>BADGES</h2><span class="num" id="badgeCount" style="font-size:13px;color:var(--accent);font-weight:600">0/0</span></div>
       <div class="badge-grid" id="badgeGrid"></div>
     </div>
+
+    <!-- DATA -->
+    <div class="view" id="view-data">
+      <div class="row-head"><h2>DATA</h2></div>
+      <div class="panel glass">
+        <h4>BACKUP &amp; RESTORE</h4>
+        <p class="data-desc">Save all your data — habits, daily notes, and your daily &amp; weekly to-dos — to one file, or restore it from a previous backup.</p>
+        <div class="data-actions">
+          <button class="data-btn primary" id="exportBtn">↓ Export backup</button>
+          <button class="data-btn" id="importBtn">↑ Import backup</button>
+        </div>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+        <div class="data-status" id="dataStatus"></div>
+      </div>
+    </div>
   </div>
 
   <nav class="nav">
@@ -349,6 +373,7 @@
     <button data-v="cal"><span class="ic">▦</span>Calendar</button>
     <button data-v="stats"><span class="ic">◰</span>Stats</button>
     <button data-v="badges"><span class="ic">◆</span>Badges</button>
+    <button data-v="data"><span class="ic">⇅</span>Data</button>
   </nav>
 
   <div class="scrim" id="scrim"></div>
@@ -709,6 +734,41 @@ for(const kk of TODO_SCOPES){
   });
 }
 document.querySelector('.nav button[data-v="todo"]').addEventListener('click',renderTodos);
+
+/* data backup & restore (covers every localStorage key the app uses) */
+const BACKUP_KEYS=[KEY,THEME_KEY,NOTES_KEY,TODO_KEY];
+function dataStatus(msg,err){const el=document.getElementById('dataStatus');if(!el)return;el.textContent=msg;el.style.color=err?'#FF6B6B':'';}
+function exportData(){
+  const data={};
+  BACKUP_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v===null)return;try{data[k]=JSON.parse(v);}catch(e){data[k]=v;}});
+  const payload={app:'habit-quest',version:1,exportedAt:new Date().toISOString(),data};
+  const fname=`habit-quest-backup-${TODAY()}.json`;
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  dataStatus('Backup exported as '+fname);
+}
+function importData(file){
+  const reader=new FileReader();
+  reader.onload=()=>{
+    let payload;try{payload=JSON.parse(reader.result);}catch(e){dataStatus('Invalid file — not valid JSON.',true);return;}
+    const d=payload&&typeof payload==='object'&&payload.data&&typeof payload.data==='object'?payload.data:null;
+    if(!d){dataStatus('Unrecognized backup file.',true);return;}
+    if(!confirm('Restore this backup? This will REPLACE all current data — habits, notes, and to-dos — and cannot be undone.'))return;
+    BACKUP_KEYS.forEach(k=>{
+      if(Object.prototype.hasOwnProperty.call(d,k)){const val=d[k];localStorage.setItem(k,typeof val==='string'?val:JSON.stringify(val));}
+      else localStorage.removeItem(k);
+    });
+    location.reload();
+  };
+  reader.onerror=()=>dataStatus('Could not read the file.',true);
+  reader.readAsText(file);
+}
+document.getElementById('exportBtn').addEventListener('click',exportData);
+const importFileEl=document.getElementById('importFile');
+document.getElementById('importBtn').addEventListener('click',()=>importFileEl.click());
+importFileEl.addEventListener('change',()=>{if(importFileEl.files&&importFileEl.files[0])importData(importFileEl.files[0]);importFileEl.value='';});
 
 /* boot */
 (function(){
