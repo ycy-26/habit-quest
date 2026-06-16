@@ -131,7 +131,19 @@
   .detail{position:fixed;inset:0;z-index:25;background:var(--bg);overflow-y:auto;display:none;justify-content:center}
   .detail.show{display:flex}
   .detail-inner{width:100%;max-width:430px;padding:18px 18px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
-  #detailBody{display:flex;flex-direction:column;gap:16px}
+  #detailBody,#recapBody{display:flex;flex-direction:column;gap:16px}
+  .recap-cmp{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .rc-col{text-align:center}
+  .rc-k{font-size:11px;color:var(--muted)}
+  .rc-v{font-family:'Space Grotesk';font-size:24px;font-weight:600;margin-top:3px}
+  .rc-arrow{font-family:'Space Grotesk';font-size:13px;font-weight:600;padding:5px 11px;border-radius:9px;background:var(--glass-2);white-space:nowrap}
+  .rc-arrow.up{color:#34D399}
+  .rc-arrow.down{color:#FF6B6B}
+  .rc-arrow.flat{color:var(--muted)}
+  .recap-top{display:flex;align-items:center;gap:13px}
+  .recap-top .h-emoji{width:46px;height:46px;border-radius:13px;font-size:22px}
+  .rt-name{font-size:15px;font-weight:600;letter-spacing:-.01em}
+  .rt-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
   .back-btn{align-self:flex-start;background:var(--glass);border:1px solid var(--border);color:var(--text);border-radius:11px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));transition:transform .12s}
   .back-btn:active{transform:scale(.97)}
   .detail-hd{display:flex;align-items:center;gap:14px}
@@ -431,6 +443,7 @@
 
     <!-- STATS -->
     <div class="view" id="view-stats">
+      <div class="row-head"><h2>STATS</h2><button class="icon-btn" id="recapBtn">This week ›</button></div>
       <div class="stat-grid">
         <div class="stat glass"><div class="k">Longest streak</div><div class="v num" id="stLongest">0 <small>d</small></div></div>
         <div class="stat glass"><div class="k">Total completions</div><div class="v num" id="stTotal">0</div></div>
@@ -538,6 +551,13 @@
     </div>
   </div>
 
+  <div class="detail" id="recap">
+    <div class="detail-inner">
+      <button class="back-btn" id="recapBack">‹ Back</button>
+      <div id="recapBody"></div>
+    </div>
+  </div>
+
 <script>
 const KEY='habit-quest-v1', THEME_KEY='habit-quest-theme', SHOP_KEY='habit-quest-shop-v1';
 const DSHORT=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -566,6 +586,7 @@ function titleFor(l){let t='Rookie';for(const[x,n]of TITLES)if(l>=x)t=n;return t
 function rate30(h){let done=0,sch=0;lastDays(30).forEach(x=>{const k=key(x);if(scheduledOn(h,k)){sch++;if(isDone(h,k))done++;}});return sch?done/sch:0;}
 function longestOf(h){const dk=Object.keys(h.history).filter(k=>isDone(h,k));const set=new Set(dk);let m=0;dk.forEach(k=>{const l=runLen(h,set,k);if(l>m)m=l;});return m;}
 function curWeekDates(){const x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));const o=[];for(let i=0;i<7;i++){const d=new Date(x);d.setDate(x.getDate()+i);o.push(d);}return o;}
+function weekDates(offset){const x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7)+offset*7);const o=[];for(let i=0;i<7;i++){const d=new Date(x);d.setDate(x.getDate()+i);o.push(d);}return o;}
 function weeklyDone(h){let n=0;curWeekDates().forEach(d=>{if(isDone(h,key(d)))n++;});return n;}
 
 /* badges */
@@ -1043,6 +1064,36 @@ function openDetail(id){
 }
 function closeDetail(){document.getElementById('detail').classList.remove('show');}
 document.getElementById('detailBack').addEventListener('click',closeDetail);
+
+/* weekly recap (read-only, derived from existing data) */
+function openRecap(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const tw=weekDates(0),lw=weekDates(-1);
+  function agg(dates,cap){let comp=0,done=0,sch=0;dates.forEach(d=>{const past=d<=today,k=key(d);habits.forEach(h=>{if(isDone(h,k))comp++;if(scheduledOn(h,k)&&(!cap||past)){sch++;if(isDone(h,k))done++;}});});return{comp,rate:sch?done/sch:0};}
+  const tA=agg(tw,true),lA=agg(lw,false);
+  let best=null,bestN=-1;habits.forEach(h=>{let n=0;tw.forEach(d=>{if(isDone(h,key(d)))n++;});if(n>bestN){bestN=n;best=h;}});
+  let perfect=0;tw.forEach(d=>{if(d>today)return;const k=key(d),sched=habits.filter(h=>scheduledOn(h,k));if(sched.length&&sched.every(h=>isDone(h,k)))perfect++;});
+  const streak=habits.reduce((m,h)=>Math.max(m,streakOf(h)),0);
+  const tp=Math.round(tA.rate*100),lp=Math.round(lA.rate*100),delta=tp-lp;
+  const dir=delta>0?'up':delta<0?'down':'flat',arrow=delta>0?'▲':delta<0?'▼':'—';
+  const ws=tw[0],we=tw[6],range=`${MONTHS[ws.getMonth()].slice(0,3)} ${ws.getDate()} – ${MONTHS[we.getMonth()].slice(0,3)} ${we.getDate()}`;
+  const bestHtml=(best&&bestN>0)?`<div class="recap-top"><div class="h-emoji" style="background:${best.color}26">${best.emoji}</div><div><div class="rt-name">${esc(best.name)}</div><div class="rt-sub">${bestN} ${bestN===1?'day':'days'} done this week</div></div></div>`:'<div class="rt-sub" style="text-align:center">No completions yet this week.</div>';
+  document.getElementById('recapBody').innerHTML=`<div class="detail-hd"><div class="detail-emoji" style="background:var(--accent-weak)">📅</div><div><h2>This week</h2><div class="detail-sub">${range}</div></div></div>
+    <div class="stat-grid">
+      <div class="stat glass"><div class="k">✅ Completed</div><div class="v num">${tA.comp}</div></div>
+      <div class="stat glass"><div class="k">🔥 Best streak</div><div class="v num">${streak} <small>d</small></div></div>
+      <div class="stat glass"><div class="k">☀️ Perfect days</div><div class="v num">${perfect}</div></div>
+      <div class="stat glass"><div class="k">📊 Completion</div><div class="v num">${tp}<small>%</small></div></div>
+    </div>
+    <div class="panel glass"><h4>Completion vs last week</h4>
+      <div class="recap-cmp"><div class="rc-col"><div class="rc-k">This week</div><div class="rc-v num">${tp}%</div></div><div class="rc-arrow ${dir}">${arrow} ${Math.abs(delta)} pts</div><div class="rc-col"><div class="rc-k">Last week</div><div class="rc-v num">${lp}%</div></div></div>
+    </div>
+    <div class="panel glass"><h4>Top habit this week</h4>${bestHtml}</div>`;
+  const el=document.getElementById('recap');el.classList.add('show');el.scrollTop=0;
+}
+function closeRecap(){document.getElementById('recap').classList.remove('show');}
+document.getElementById('recapBtn').addEventListener('click',openRecap);
+document.getElementById('recapBack').addEventListener('click',closeRecap);
 
 /* XP shop (spendable balance = earned XP − spent; never affects level/earned XP) */
 let shop={unlocked:[],spent:0,palette:'default',title:null,avatar:null};
