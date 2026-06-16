@@ -191,6 +191,21 @@
   .rate .rt{flex:1;height:7px;background:var(--track);border-radius:99px;overflow:hidden}
   .rate .rt i{display:block;height:100%;border-radius:99px;background:var(--c)}
   .rate .rp{font-family:'Space Grotesk';font-size:12px;color:var(--muted);width:32px;text-align:right}
+  .chart30{gap:2px}
+  .chart .bar.hi{background:var(--accent-2)}
+  .bigring{position:relative;width:128px;height:128px;margin:2px auto 0}
+  .bigring svg{transform:rotate(-90deg)}
+  .bigring .c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .bigring .c b{font-family:'Space Grotesk';font-size:30px;font-weight:600;letter-spacing:-.01em}
+  .bigring .c small{font-size:10px;color:var(--muted);margin-top:1px}
+  .best-note{font-size:12.5px;color:var(--muted);text-align:center;margin-top:13px}
+  .best-note b{color:var(--accent);font-weight:700}
+  .streak-cards{display:flex;flex-wrap:wrap;gap:9px}
+  .scard{flex:1 1 calc(33.333% - 6px);min-width:86px;border:1px solid var(--border);background:var(--glass-2);border-radius:13px;padding:11px 8px;text-align:center}
+  .scard .se{font-size:18px;line-height:1}
+  .scard .sv{font-family:'Space Grotesk';font-size:20px;font-weight:600;margin-top:4px}
+  .scard .sv small{font-size:11px;color:var(--muted);font-weight:500}
+  .scard .sn{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* calendar */
   .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -348,7 +363,19 @@
         <div class="stat glass"><div class="k">Last 30 days</div><div class="v num" id="stRate">0<small>%</small></div></div>
         <div class="stat glass"><div class="k">Level</div><div class="v num" id="stLevel">1</div></div>
       </div>
+      <div class="panel glass"><h4>Overall completion · last 30 days</h4>
+        <div class="bigring">
+          <svg width="128" height="128" viewBox="0 0 110 110">
+            <circle cx="55" cy="55" r="46" fill="none" stroke="var(--track)" stroke-width="8"/>
+            <circle id="statRing" cx="55" cy="55" r="46" fill="none" stroke="url(#ringGrad)" stroke-width="8" stroke-linecap="round" stroke-dasharray="289.03" stroke-dashoffset="289.03"/>
+          </svg>
+          <div class="c"><b class="num" id="statRingPct">0%</b><small>completed</small></div>
+        </div>
+      </div>
       <div class="panel glass"><h4>Last 14 days · completed habits</h4><div class="chart" id="chart"></div></div>
+      <div class="panel glass"><h4>Last 30 days · completed habits</h4><div class="chart chart30" id="chart30"></div></div>
+      <div class="panel glass"><h4>Best day of the week</h4><div class="chart" id="wdChart"></div><div class="best-note" id="wdBest"></div></div>
+      <div class="panel glass"><h4>Current streaks</h4><div class="streak-cards" id="streakCards"></div></div>
       <div class="panel glass"><h4>Success rate · last 30 days</h4><div class="ratebars" id="rateBars"></div></div>
     </div>
 
@@ -491,7 +518,8 @@ function seed(){
 
 /* render */
 function esc(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-const RING_LEN=232.5;
+const RING_LEN=232.5, RING2=289.03;
+const FULLDAYS=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 function renderHero(c){
   const li=levelInfo(c.xp);
   document.getElementById('lvlNum').textContent=li.level;
@@ -529,8 +557,29 @@ function renderStats(c){
   document.getElementById('stLevel').textContent=li.level;
   let r=0;if(habits.length){let t=0;habits.forEach(h=>t+=rate30(h));r=Math.round(t/habits.length*100);}
   document.getElementById('stRate').innerHTML=`${r}<small>%</small>`;
-  const ch=document.getElementById('chart');ch.innerHTML='';const max=Math.max(1,habits.length);
+  // overall completion ring
+  document.getElementById('statRingPct').textContent=r+'%';
+  document.getElementById('statRing').style.strokeDashoffset=RING2*(1-r/100);
+  const max=Math.max(1,habits.length);
+  // 14-day chart
+  const ch=document.getElementById('chart');ch.innerHTML='';
   lastDays(14).forEach(d=>{const n=habits.filter(h=>isDone(h,key(d))).length;const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar" style="height:${(n/max)*100}%"></div><small>${d.getDate()}</small>`;ch.appendChild(col);});
+  // 30-day chart
+  const ch30=document.getElementById('chart30');ch30.innerHTML='';
+  lastDays(30).forEach((d,i)=>{const n=habits.filter(h=>isDone(h,key(d))).length;const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar" style="height:${(n/max)*100}%"></div><small>${i%5===0?d.getDate():''}</small>`;ch30.appendChild(col);});
+  // best day of week
+  const wt=[0,0,0,0,0,0,0];
+  habits.forEach(h=>Object.keys(h.history).forEach(k=>{if(isDone(h,k))wt[parseKey(k).getDay()]++;}));
+  const order=[1,2,3,4,5,6,0],wmax=Math.max(1,...order.map(i=>wt[i]));
+  let bestIdx=1,bestVal=-1;order.forEach(i=>{if(wt[i]>bestVal){bestVal=wt[i];bestIdx=i;}});
+  const wch=document.getElementById('wdChart');wch.innerHTML='';
+  order.forEach((i,j)=>{const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar${i===bestIdx&&bestVal>0?' hi':''}" style="height:${(wt[i]/wmax)*100}%"></div><small>${WD[j]}</small>`;wch.appendChild(col);});
+  document.getElementById('wdBest').innerHTML=bestVal>0?`You complete the most on <b>${FULLDAYS[bestIdx]}</b>`:'No completions yet — start today!';
+  // current streaks (side by side)
+  const sc=document.getElementById('streakCards');sc.innerHTML='';
+  if(!habits.length)sc.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';
+  habits.forEach(h=>{const st=streakOf(h);const el=document.createElement('div');el.className='scard';el.innerHTML=`<div class="se">${h.emoji}</div><div class="sv">${st}<small> d</small></div><div class="sn">${esc(h.name)}</div>`;sc.appendChild(el);});
+  // success rate bars
   const rb=document.getElementById('rateBars');rb.innerHTML='';
   if(!habits.length){rb.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';}
   habits.forEach(h=>{const p=Math.round(rate30(h)*100);const row=document.createElement('div');row.className='rate';row.style.setProperty('--c',h.color);row.innerHTML=`<div class="rl">${h.emoji} ${esc(h.name)}</div><div class="rt"><i style="width:${p}%"></i></div><div class="rp">${p}%</div>`;rb.appendChild(row);});
