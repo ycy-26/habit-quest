@@ -126,6 +126,32 @@
   .daychip{flex:1;min-width:36px;padding:9px 0;border-radius:10px;border:1px solid var(--border);background:var(--glass-2);
     color:var(--muted);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s}
   .daychip.on{background:var(--accent);color:#fff;border-color:transparent}
+
+  /* habit detail */
+  .detail{position:fixed;inset:0;z-index:25;background:var(--bg);overflow-y:auto;display:none;justify-content:center}
+  .detail.show{display:flex}
+  .detail-inner{width:100%;max-width:430px;padding:18px 18px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
+  #detailBody{display:flex;flex-direction:column;gap:16px}
+  .back-btn{align-self:flex-start;background:var(--glass);border:1px solid var(--border);color:var(--text);border-radius:11px;padding:8px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));transition:transform .12s}
+  .back-btn:active{transform:scale(.97)}
+  .detail-hd{display:flex;align-items:center;gap:14px}
+  .detail-emoji{width:54px;height:54px;border-radius:15px;display:grid;place-items:center;font-size:27px;background:var(--c-weak);flex-shrink:0}
+  .detail-hd h2{font-family:'Space Grotesk';font-size:21px;font-weight:600;letter-spacing:-.01em;word-break:break-word}
+  .detail-sub{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .daylist{display:flex;flex-direction:column;max-height:60vh;overflow-y:auto;margin:0 -2px;padding-right:2px}
+  .dl-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid var(--border-soft)}
+  .dl-row:last-child{border-bottom:none}
+  .dl-date{font-size:13.5px;color:var(--text);font-weight:500}
+  .dl-st{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .dl-st i{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+  .dl-st.done{color:var(--text)}
+  .dl-st.done i{background:var(--c)}
+  .dl-st.miss{color:var(--faint)}
+  .dl-st.miss i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)}
+  .dl-st.rest{color:var(--faint)}
+  .dl-st.rest i{background:var(--c-weak)}
+  .dl-st.today{color:var(--accent-2)}
+  .dl-st.today i{background:var(--accent-2)}
   .h-meta .wk{color:var(--accent);font-weight:700}
   .h-meta .wk.done{color:var(--accent-2)}
 
@@ -462,6 +488,13 @@
 
   <div class="cele" id="cele"><div class="cele-card"><div class="ce" id="celeIcon">✦</div><h3 id="celeTitle"></h3><p id="celeText"></p></div></div>
 
+  <div class="detail" id="detail">
+    <div class="detail-inner">
+      <button class="back-btn" id="detailBack">‹ Back</button>
+      <div id="detailBody"></div>
+    </div>
+  </div>
+
 <script>
 const KEY='habit-quest-v1', THEME_KEY='habit-quest-theme';
 const DSHORT=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -488,6 +521,7 @@ function compute(){let xp=0,longest=0,completions=0;for(const h of habits){const
 function levelInfo(xp){let lvl=1,need=100,acc=0;while(xp>=acc+need){acc+=need;lvl++;need=100+(lvl-1)*50;}return{level:lvl,into:Math.floor(xp-acc),need,pct:(xp-acc)/need};}
 function titleFor(l){let t='Rookie';for(const[x,n]of TITLES)if(l>=x)t=n;return t;}
 function rate30(h){let done=0,sch=0;lastDays(30).forEach(x=>{const k=key(x);if(scheduledOn(h,k)){sch++;if(isDone(h,k))done++;}});return sch?done/sch:0;}
+function longestOf(h){const dk=Object.keys(h.history).filter(k=>isDone(h,k));const set=new Set(dk);let m=0;dk.forEach(k=>{const l=runLen(h,set,k);if(l>m)m=l;});return m;}
 function curWeekDates(){const x=new Date();x.setHours(0,0,0,0);x.setDate(x.getDate()-((x.getDay()+6)%7));const o=[];for(let i=0;i<7;i++){const d=new Date(x);d.setDate(x.getDate()+i);o.push(d);}return o;}
 function weeklyDone(h){let n=0;curWeekDates().forEach(d=>{if(isDone(h,key(d)))n++;});return n;}
 
@@ -577,7 +611,7 @@ function renderToday(){
   const tk=TODAY(),week=lastDays(7);
   habits.forEach(h=>{
     const due=scheduledOn(h,tk),s=streakOf(h),done=isDone(h,tk),v=valOf(h,tk),wp=h.weekly?weeklyDone(h):0;
-    const card=document.createElement('div');card.className='habit glass'+(due?'':' rest');
+    const card=document.createElement('div');card.className='habit glass'+(due?'':' rest');card.dataset.id=h.id;
     card.style.setProperty('--c',h.color);card.style.setProperty('--c2',h.color);card.style.setProperty('--c-weak',h.color+'26');
     let control;
     if(!due){control='<div class="rest-pill">Rest day</div>';}
@@ -700,8 +734,11 @@ document.getElementById('todayList').addEventListener('click',e=>{
   if(ed){openEditSheet(habits.find(x=>x.id===ed.dataset.edit));return;}
   const del=e.target.closest('.del');
   if(del){habits=habits.filter(x=>x.id!==del.dataset.del);save();prev=snapshot();renderAll();return;}
+  const open=e.target.closest('.h-emoji,.h-info');
+  if(open&&!dragMoved){const card=open.closest('.habit');if(card)openDetail(card.dataset.id);}
 });
 /* drag-and-drop reordering (mouse + touch) */
+let dragMoved=false;
 (function(){
   const list=document.getElementById('todayList');
   const CTRL='.check,.cbtn,.del,.hedit',GAP=11;
@@ -709,7 +746,7 @@ document.getElementById('todayList').addEventListener('click',e=>{
   let startX=0,startY=0,slotH=0,fromIndex=0,toIndex=0,items=[],centers=[];
   function beginDrag(){
     clearTimeout(lpTimer);
-    dragging=true;dragEl=pending;pending=null;
+    dragging=true;dragMoved=true;dragEl=pending;pending=null;
     items=[...list.querySelectorAll('.habit')];
     fromIndex=items.indexOf(dragEl);toIndex=fromIndex;
     const r=dragEl.getBoundingClientRect();slotH=r.height+GAP;
@@ -759,6 +796,7 @@ document.getElementById('todayList').addEventListener('click',e=>{
       if(toIndex!==fromIndex){const[m]=habits.splice(fromIndex,1);habits.splice(toIndex,0,m);save();renderAll();}
     }
     pending=null;dragging=false;dragEl=null;pid=null;items=[];
+    setTimeout(()=>{dragMoved=false;},0);
   }
   list.addEventListener('pointerdown',onDown);
   list.addEventListener('pointermove',onMove);
@@ -922,6 +960,38 @@ document.getElementById('exportBtn').addEventListener('click',exportData);
 const importFileEl=document.getElementById('importFile');
 document.getElementById('importBtn').addEventListener('click',()=>importFileEl.click());
 importFileEl.addEventListener('change',()=>{if(importFileEl.files&&importFileEl.files[0])importData(importFileEl.files[0]);importFileEl.value='';});
+
+/* habit detail (read-only, derived from existing data) */
+function fmtSchedule(h){return(!h.days||!h.days.length)?'Every day':[1,2,3,4,5,6,0].filter(g=>h.days.includes(g)).map(g=>FULLDAYS[g].slice(0,3)).join(' · ');}
+function openDetail(id){
+  const h=habits.find(x=>x.id===id);if(!h)return;
+  const cur=streakOf(h),lng=longestOf(h),rate=Math.round(rate30(h)*100),total=Object.keys(h.history).filter(k=>isDone(h,k)).length;
+  const tk=TODAY();let rows='';
+  const hist=lastDays(30);
+  for(let i=hist.length-1;i>=0;i--){
+    const d=hist[i],k=key(d);
+    let label,cls;
+    if(isDone(h,k)){label='Done';cls='done';}
+    else if(!scheduledOn(h,k)){label='Rest day';cls='rest';}
+    else if(k===tk){label='Today';cls='today';}
+    else{label='Missed';cls='miss';}
+    rows+=`<div class="dl-row"><span class="dl-date">${FULLDAYS[d.getDay()].slice(0,3)} · ${MONTHS[d.getMonth()].slice(0,3)} ${d.getDate()}</span><span class="dl-st ${cls}"><i></i>${label}</span></div>`;
+  }
+  const typeTxt=h.type==='count'?`Goal ${h.target} ${esc(h.unit||'')}/day`:'Done / not done';
+  const body=document.getElementById('detailBody');
+  body.style.setProperty('--c',h.color);body.style.setProperty('--c-weak',h.color+'26');
+  body.innerHTML=`<div class="detail-hd"><div class="detail-emoji">${h.emoji}</div><div><h2>${esc(h.name)}</h2><div class="detail-sub">${typeTxt} · ${fmtSchedule(h)}${h.weekly?` · ${h.weekly}×/week`:''}</div></div></div>
+    <div class="stat-grid">
+      <div class="stat glass"><div class="k">🔥 Current streak</div><div class="v num">${cur} <small>d</small></div></div>
+      <div class="stat glass"><div class="k">Longest streak</div><div class="v num">${lng} <small>d</small></div></div>
+      <div class="stat glass"><div class="k">Completion · 30d</div><div class="v num">${rate}<small>%</small></div></div>
+      <div class="stat glass"><div class="k">Total done</div><div class="v num">${total}</div></div>
+    </div>
+    <div class="panel glass"><h4>Last 30 days</h4><div class="daylist">${rows}</div></div>`;
+  document.getElementById('detail').classList.add('show');document.getElementById('detail').scrollTop=0;
+}
+function closeDetail(){document.getElementById('detail').classList.remove('show');}
+document.getElementById('detailBack').addEventListener('click',closeDetail);
 
 /* boot */
 (function(){
