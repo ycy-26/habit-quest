@@ -230,6 +230,8 @@
     padding:13px;font-family:inherit;font-size:14.5px;font-weight:600;cursor:pointer;transition:transform .15s,border-color .2s}
   .data-btn:active{transform:scale(.98)}
   .data-btn.primary{border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff}
+  .data-btn.danger{border:1px solid #FF6B6B;color:#FF6B6B;background:transparent}
+  .data-btn.danger:active{background:rgba(255,107,107,.12)}
   .data-status{font-size:12px;color:var(--accent);font-weight:600;margin-top:14px;min-height:15px}
 
   /* stats */
@@ -492,6 +494,11 @@
         </div>
         <input type="file" id="importFile" accept="application/json,.json" hidden>
         <div class="data-status" id="dataStatus"></div>
+      </div>
+      <div class="panel glass">
+        <h4>START FRESH</h4>
+        <p class="data-desc">Permanently erase <b>everything</b> — habits, notes, daily &amp; weekly to-dos, and shop purchases — and reset to an empty app. This can't be undone, so export a backup above first.</p>
+        <button class="data-btn danger" id="wipeBtn">Start fresh — erase all data</button>
       </div>
     </div>
   </div>
@@ -994,6 +1001,12 @@ function importData(file){
   reader.onerror=()=>dataStatus('Could not read the file.',true);
   reader.readAsText(file);
 }
+function wipeAll(){
+  if(!confirm('Start fresh? This permanently erases ALL data — habits, notes, to-dos, and shop purchases — and resets to an empty app. This cannot be undone.'))return;
+  BACKUP_KEYS.forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+  location.reload();
+}
+document.getElementById('wipeBtn').addEventListener('click',wipeAll);
 document.getElementById('exportBtn').addEventListener('click',exportData);
 const importFileEl=document.getElementById('importFile');
 document.getElementById('importBtn').addEventListener('click',()=>importFileEl.click());
@@ -1094,7 +1107,7 @@ document.getElementById('view-shop').addEventListener('click',e=>{
   if(!t)t='dark';
   applyTheme(t);
   loadShop();applyPalette(shop.palette);
-  const s=load();if(s)habits=s;else{habits=seed();save();}
+  const s=load();habits=Array.isArray(s)?s:[];
   prev=snapshot();renderAll();initNote();renderTodos();
 })();
 </script>
