@@ -206,6 +206,19 @@
   .scard .sv{font-family:'Space Grotesk';font-size:20px;font-weight:600;margin-top:4px}
   .scard .sv small{font-size:11px;color:var(--muted);font-weight:500}
   .scard .sn{font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* interactive charts */
+  .ichart-sel{font-size:13px;color:var(--text);font-weight:600;margin-bottom:12px;min-height:18px}
+  .ichart-sel b{font-family:'Space Grotesk';color:var(--accent)}
+  .ichart-plot{display:flex;gap:8px;align-items:stretch}
+  .yaxis{display:flex;flex-direction:column;justify-content:space-between;height:108px;min-width:16px;text-align:right;
+    font-family:'Space Grotesk';font-size:8.5px;color:var(--faint)}
+  .chart-wrap{position:relative;flex:1;min-width:0}
+  .chart{touch-action:pan-y}
+  .col{cursor:pointer}
+  .col.sel .bar{filter:brightness(1.18);box-shadow:0 0 0 2px var(--accent-2)}
+  .chart-tip{position:absolute;transform:translateX(-50%);background:var(--glass-strong);border:1px solid var(--border);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--text);font-family:'Space Grotesk';font-size:11px;font-weight:600;
+    padding:3px 8px;border-radius:8px;pointer-events:none;white-space:nowrap;z-index:3;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 
   /* calendar */
   .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -372,9 +385,19 @@
           <div class="c"><b class="num" id="statRingPct">0%</b><small>completed</small></div>
         </div>
       </div>
-      <div class="panel glass"><h4>Last 14 days · completed habits</h4><div class="chart" id="chart"></div></div>
-      <div class="panel glass"><h4>Last 30 days · completed habits</h4><div class="chart chart30" id="chart30"></div></div>
-      <div class="panel glass"><h4>Best day of the week</h4><div class="chart" id="wdChart"></div><div class="best-note" id="wdBest"></div></div>
+      <div class="panel glass"><h4>Last 14 days · completed habits</h4>
+        <div class="ichart-sel" id="chartSel">—</div>
+        <div class="ichart-plot"><div class="yaxis" id="chartAxis"></div><div class="chart-wrap"><div class="chart" id="chart"></div><div class="chart-tip" id="chartTip" hidden></div></div></div>
+      </div>
+      <div class="panel glass"><h4>Last 30 days · completed habits</h4>
+        <div class="ichart-sel" id="chart30Sel">—</div>
+        <div class="ichart-plot"><div class="yaxis" id="chart30Axis"></div><div class="chart-wrap"><div class="chart chart30" id="chart30"></div><div class="chart-tip" id="chart30Tip" hidden></div></div></div>
+      </div>
+      <div class="panel glass"><h4>Best day of the week</h4>
+        <div class="ichart-sel" id="wdSel">—</div>
+        <div class="ichart-plot"><div class="yaxis" id="wdAxis"></div><div class="chart-wrap"><div class="chart" id="wdChart"></div><div class="chart-tip" id="wdTip" hidden></div></div></div>
+        <div class="best-note" id="wdBest"></div>
+      </div>
       <div class="panel glass"><h4>Current streaks</h4><div class="streak-cards" id="streakCards"></div></div>
       <div class="panel glass"><h4>Success rate · last 30 days</h4><div class="ratebars" id="rateBars"></div></div>
     </div>
@@ -550,6 +573,38 @@ function renderToday(){
     list.appendChild(card);
   });
 }
+/* interactive charts (tap/hover/scrub — mouse + touch) */
+const chartState={};
+function chartIdxAtX(chart,x){const k=chart.children;if(!k.length)return -1;for(let i=0;i<k.length;i++){const r=k[i].getBoundingClientRect();if(x>=r.left&&x<=r.right)return i;}return x<k[0].getBoundingClientRect().left?0:k.length-1;}
+function chartSelect(chart,i,showTip){
+  const st=chartState[chart.id];if(!st||i<0||i>=st.pts.length)return;st.cur=i;
+  const kids=chart.children;for(let j=0;j<kids.length;j++)kids[j].classList.toggle('sel',j===i);
+  const p=st.pts[i];document.getElementById(st.selId).innerHTML=st.readout(p);
+  const tip=document.getElementById(st.tipId);
+  if(!showTip){tip.hidden=true;return;}
+  tip.textContent=st.tip(p);tip.hidden=false;
+  const wrap=chart.parentElement,col=kids[i],bar=col.querySelector('.bar');
+  const wr=wrap.getBoundingClientRect(),cr=col.getBoundingClientRect(),br=bar.getBoundingClientRect();
+  tip.style.left=Math.max(18,Math.min(wr.width-18,cr.left-wr.left+cr.width/2))+'px';
+  let top=br.top-wr.top-tip.offsetHeight-6;if(top<0)top=0;tip.style.top=top+'px';
+}
+function bindChart(chart){
+  if(chart.dataset.bound)return;chart.dataset.bound='1';let scrub=false;
+  chart.addEventListener('pointerdown',e=>{scrub=true;try{chart.setPointerCapture(e.pointerId);}catch(_){}chartSelect(chart,chartIdxAtX(chart,e.clientX),true);});
+  chart.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'||scrub)chartSelect(chart,chartIdxAtX(chart,e.clientX),true);});
+  chart.addEventListener('pointerup',e=>{scrub=false;if(e.pointerType!=='mouse')chartSelect(chart,chartState[chart.id].cur,false);});
+  chart.addEventListener('pointercancel',()=>{scrub=false;chartSelect(chart,chartState[chart.id].cur,false);});
+  chart.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse')chartSelect(chart,chartState[chart.id].cur,false);});
+}
+function renderChart(cfg){
+  const chart=document.getElementById(cfg.chartId);chart.innerHTML='';
+  const axisMax=Math.max(1,cfg.axisMax);
+  cfg.points.forEach(p=>{const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar${p.hi?' hi':''}" style="height:${(p.value/axisMax)*100}%"></div><small>${p.short||''}</small>`;chart.appendChild(col);});
+  document.getElementById(cfg.axisId).innerHTML=`<span>${axisMax}</span><span>${axisMax>=2?Math.round(axisMax/2):''}</span><span>0</span>`;
+  chartState[cfg.chartId]={pts:cfg.points,readout:cfg.readout,tip:cfg.tip,selId:cfg.selId,tipId:cfg.tipId,cur:cfg.points.length-1};
+  bindChart(chart);
+  chartSelect(chart,cfg.points.length-1,false);
+}
 function renderStats(c){
   const li=levelInfo(c.xp);
   document.getElementById('stLongest').innerHTML=`${c.longest} <small>d</small>`;
@@ -557,31 +612,33 @@ function renderStats(c){
   document.getElementById('stLevel').textContent=li.level;
   let r=0;if(habits.length){let t=0;habits.forEach(h=>t+=rate30(h));r=Math.round(t/habits.length*100);}
   document.getElementById('stRate').innerHTML=`${r}<small>%</small>`;
-  // overall completion ring
   document.getElementById('statRingPct').textContent=r+'%';
   document.getElementById('statRing').style.strokeDashoffset=RING2*(1-r/100);
-  const max=Math.max(1,habits.length);
-  // 14-day chart
-  const ch=document.getElementById('chart');ch.innerHTML='';
-  lastDays(14).forEach(d=>{const n=habits.filter(h=>isDone(h,key(d))).length;const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar" style="height:${(n/max)*100}%"></div><small>${d.getDate()}</small>`;ch.appendChild(col);});
-  // 30-day chart
-  const ch30=document.getElementById('chart30');ch30.innerHTML='';
-  lastDays(30).forEach((d,i)=>{const n=habits.filter(h=>isDone(h,key(d))).length;const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar" style="height:${(n/max)*100}%"></div><small>${i%5===0?d.getDate():''}</small>`;ch30.appendChild(col);});
-  // best day of week
-  const wt=[0,0,0,0,0,0,0];
-  habits.forEach(h=>Object.keys(h.history).forEach(k=>{if(isDone(h,k))wt[parseKey(k).getDay()]++;}));
-  const order=[1,2,3,4,5,6,0],wmax=Math.max(1,...order.map(i=>wt[i]));
-  let bestIdx=1,bestVal=-1;order.forEach(i=>{if(wt[i]>bestVal){bestVal=wt[i];bestIdx=i;}});
-  const wch=document.getElementById('wdChart');wch.innerHTML='';
-  order.forEach((i,j)=>{const col=document.createElement('div');col.className='col';col.innerHTML=`<div class="bar${i===bestIdx&&bestVal>0?' hi':''}" style="height:${(wt[i]/wmax)*100}%"></div><small>${WD[j]}</small>`;wch.appendChild(col);});
-  document.getElementById('wdBest').innerHTML=bestVal>0?`You complete the most on <b>${FULLDAYS[bestIdx]}</b>`:'No completions yet — start today!';
+  const N=habits.length;
+  if(N){
+    const hb=n=>n===1?'habit':'habits';
+    const dayPts=days=>days.map((d,i)=>({short:(days.length>14&&i%5!==0)?'':String(d.getDate()),full:`${FULLDAYS[d.getDay()].slice(0,3)} ${d.getDate()}`,value:habits.filter(h=>isDone(h,key(d))).length}));
+    const dayRead=p=>`${p.full} — <b>${p.value}</b> of ${N} ${hb(N)} done`,dayTip=p=>`${p.value}/${N}`;
+    renderChart({chartId:'chart',axisId:'chartAxis',selId:'chartSel',tipId:'chartTip',points:dayPts(lastDays(14)),axisMax:N,readout:dayRead,tip:dayTip});
+    renderChart({chartId:'chart30',axisId:'chart30Axis',selId:'chart30Sel',tipId:'chart30Tip',points:dayPts(lastDays(30)),axisMax:N,readout:dayRead,tip:dayTip});
+    const wt=[0,0,0,0,0,0,0];habits.forEach(h=>Object.keys(h.history).forEach(k=>{if(isDone(h,k))wt[parseKey(k).getDay()]++;}));
+    const order=[1,2,3,4,5,6,0];let bI=1,bV=-1;order.forEach(i=>{if(wt[i]>bV){bV=wt[i];bI=i;}});
+    const wpts=order.map((idx,j)=>({short:WD[j],full:FULLDAYS[idx],value:wt[idx],hi:idx===bI&&bV>0}));
+    renderChart({chartId:'wdChart',axisId:'wdAxis',selId:'wdSel',tipId:'wdTip',points:wpts,axisMax:Math.max(...order.map(i=>wt[i])),readout:p=>`${p.full} — <b>${p.value}</b> ${p.value===1?'completion':'completions'}`,tip:p=>`${p.value}`});
+    document.getElementById('wdBest').innerHTML=bV>0?`You complete the most on <b>${FULLDAYS[bI]}</b>`:'No completions yet — start today!';
+  }else{
+    ['chart','chart30','wdChart','chartAxis','chart30Axis','wdAxis'].forEach(id=>document.getElementById(id).innerHTML='');
+    ['chartSel','chart30Sel','wdSel'].forEach(id=>document.getElementById(id).textContent='No habits yet');
+    ['chartTip','chart30Tip','wdTip'].forEach(id=>document.getElementById(id).hidden=true);
+    document.getElementById('wdBest').textContent='';
+  }
   // current streaks (side by side)
   const sc=document.getElementById('streakCards');sc.innerHTML='';
-  if(!habits.length)sc.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';
+  if(!N)sc.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';
   habits.forEach(h=>{const st=streakOf(h);const el=document.createElement('div');el.className='scard';el.innerHTML=`<div class="se">${h.emoji}</div><div class="sv">${st}<small> d</small></div><div class="sn">${esc(h.name)}</div>`;sc.appendChild(el);});
   // success rate bars
   const rb=document.getElementById('rateBars');rb.innerHTML='';
-  if(!habits.length){rb.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';}
+  if(!N){rb.innerHTML='<div style="color:var(--muted);font-size:13px">Add a habit first.</div>';}
   habits.forEach(h=>{const p=Math.round(rate30(h)*100);const row=document.createElement('div');row.className='rate';row.style.setProperty('--c',h.color);row.innerHTML=`<div class="rl">${h.emoji} ${esc(h.name)}</div><div class="rt"><i style="width:${p}%"></i></div><div class="rp">${p}%</div>`;rb.appendChild(row);});
 }
 function renderCal(){
