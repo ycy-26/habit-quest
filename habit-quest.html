@@ -20,6 +20,7 @@
     --text:#FFFFFF; --muted:#A9A4C8; --faint:#6E6A8A;
     --border:rgba(255,255,255,.12); --border-soft:rgba(255,255,255,.08);
     --accent:#8B7DFF; --accent-2:#22D3EE; --accent-weak:rgba(139,125,255,.18);
+    --coin:#FFD15C; --coin-2:#F5A623; --coin-weak:rgba(255,193,64,.16);
     --track:rgba(255,255,255,.10); --flame:#FF8A5B;
     --g1:.85; --g2:.55; --g3:.4; --blur:14px;
   }
@@ -28,6 +29,7 @@
     --text:#1A1730; --muted:#6B6688; --faint:#A6A2C0;
     --border:rgba(20,15,50,.08); --border-soft:rgba(20,15,50,.05);
     --accent:#6D5CFF; --accent-2:#12AEC9; --accent-weak:rgba(109,92,255,.14);
+    --coin:#E0920A; --coin-2:#C7720A; --coin-weak:rgba(224,146,10,.14);
     --track:rgba(20,15,50,.08); --flame:#E8743B;
     --g1:.4; --g2:.28; --g3:.2; --blur:14px;
   }
@@ -176,8 +178,11 @@
   .hud-av{margin-right:5px}
   .shop-bal{border-radius:18px;padding:16px 18px;text-align:center}
   .shop-bal .k{font-size:12px;color:var(--muted)}
-  .shop-bal .v{font-family:'Space Grotesk';font-size:30px;font-weight:600;margin-top:4px;background:linear-gradient(90deg,var(--accent),var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .shop-bal .v{font-family:'Space Grotesk';font-size:30px;font-weight:600;margin-top:4px;display:inline-flex;align-items:center;gap:7px;background:linear-gradient(90deg,var(--coin),var(--coin-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .shop-bal .v .coin-ic{font-size:24px;-webkit-text-fill-color:initial}
   .shop-sub{font-size:11px;color:var(--faint);margin-top:3px}
+  .shop-btn .coin-ic{font-size:12px}
+  .cost{color:var(--coin-2);font-weight:700}
   .shop-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   .shop-card{border-radius:16px;padding:14px;display:flex;flex-direction:column;align-items:center;gap:9px;text-align:center}
   .shop-card.active{box-shadow:0 0 0 1.5px var(--accent)}
@@ -491,7 +496,7 @@
 
     <!-- SHOP -->
     <div class="view" id="view-shop">
-      <div class="shop-bal glass"><div class="k">Spendable balance</div><div class="v num" id="shopBal">0 XP</div><div class="shop-sub" id="shopSpent"></div></div>
+      <div class="shop-bal glass"><div class="k">Coins to spend</div><div class="v num" id="shopBal"><span class="coin-ic">🪙</span><span>0</span></div><div class="shop-sub" id="shopSpent"></div></div>
       <div class="row-head"><h2>THEMES</h2></div>
       <div class="shop-grid" id="shopPalettes"></div>
       <div class="row-head"><h2>TITLES</h2></div>
@@ -1131,14 +1136,14 @@ function applyPalette(id){
   else{r.setProperty('--accent',p.accent);r.setProperty('--accent-2',p.accent2);r.setProperty('--accent-weak',p.accent+'2e');r.setProperty('--glow1',p.glow1);r.setProperty('--glow2',p.glow2);r.setProperty('--glow3',p.glow3);}
 }
 function shopAction(item,group,active,bal){
-  if(!owned(item.id))return `<button class="shop-btn" data-buy="${item.id}" data-cost="${item.cost}"${bal<item.cost?' disabled':''}>${item.cost} XP</button>`;
+  if(!owned(item.id))return `<button class="shop-btn" data-buy="${item.id}" data-cost="${item.cost}"${bal<item.cost?' disabled':''}><span class="coin-ic">🪙</span> <span class="cost">${item.cost}</span></button>`;
   if(group==='pack')return `<span class="shop-owned">Owned ✓</span>`;
   return `<button class="shop-btn${active?' on':''}" data-equip="${item.id}" data-g="${group}">${active?'Equipped':'Equip'}</button>`;
 }
 function renderShop(){
   const bal=balance();
-  document.getElementById('shopBal').textContent=bal+' XP';
-  document.getElementById('shopSpent').textContent=`${compute().xp} earned · ${shop.spent} spent`;
+  document.getElementById('shopBal').innerHTML=`<span class="coin-ic">🪙</span><span>${bal}</span>`;
+  document.getElementById('shopSpent').textContent=`${compute().xp} XP earned · ${shop.spent} coins spent`;
   const pg=document.getElementById('shopPalettes');pg.innerHTML='';
   PALETTES.forEach(p=>{const el=document.createElement('div');el.className='shop-card glass'+(shop.palette===p.id?' active':'');el.innerHTML=`<div class="sw" style="background:linear-gradient(135deg,${p.sw[0]},${p.sw[1]})"></div><div class="si-name">${p.name}</div>${shopAction(p,'palette',shop.palette===p.id,bal)}`;pg.appendChild(el);});
   const ag=document.getElementById('shopAvatars');ag.innerHTML='';
